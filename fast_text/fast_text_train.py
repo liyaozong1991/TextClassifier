@@ -56,19 +56,16 @@ for data in raw_data_record_list:
     labels = label_dict[data[1]]
     data_record_list.append(([words, labels]))
 
-
-# 生成训练数据
+# generate train data
 def generate_batch(batch_size, data_record_list):
     for i in range(0, len(data_record_list), batch_size):
         batch = [k[0] for k in data_record_list[i:i+batch_size]]
         labels = [k[1] for k in data_record_list[i:i+batch_size]]
         yield batch, labels
 
-
 # build graph
 vocabulary_size = len(word_dict)
 num_classes = len(label_dict)
-
 graph = tf.Graph()
 with graph.as_default():
     # input data
@@ -106,7 +103,7 @@ with graph.as_default():
         for batch, labels in batch_generator:
             num += 1
             loss, _ = sess.run([mean_loss, train_step], feed_dict={train_inputs: batch, train_labels: labels})
-            print('第{}轮训结束，损失：{}'.format(num, loss))
+            print('The {}th train is over, loss: {}'.format(num, loss))
 
     saver = tf.train.Saver()
     saver.save(sess, './model/fast_text.model')
