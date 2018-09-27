@@ -4,6 +4,8 @@ import tensorflow as tf
 import collections
 import numpy as np
 
+import time
+
 epoches = 10
 words_length = 300
 n_words = 60000
@@ -97,13 +99,16 @@ with graph.as_default():
     sess = tf.Session()
     sess.run(init)
     num = 0
+    start_time = time.time()
     for k in range(epoches):
         np.random.shuffle(data_record_list)
         batch_generator = generate_batch(batch_size, data_record_list)
         for batch, labels in batch_generator:
             num += 1
             loss, _ = sess.run([mean_loss, train_step], feed_dict={train_inputs: batch, train_labels: labels})
-            print('The {}th train is over, loss: {}'.format(num, loss))
+            # print('The {}th train is over, loss: {}'.format(num, loss))
+    end_time = time.time()
+    print('total time:{}'.format(end_time - start_time))
 
     saver = tf.train.Saver()
     saver.save(sess, './model/fast_text.model')
