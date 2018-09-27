@@ -1,5 +1,4 @@
 # coding: utf8
-
 import tensorflow as tf
 
 word_dict = {}
@@ -15,7 +14,6 @@ with open('./model/label_dict') as f:
         line = line.strip()
         line_items = line.split('\t')
         label_dict[line_items[0]] = line_items[1]
-
 
 test_data_path = '../data/20ng-test-no-stop.txt'
 words_length = 300
