@@ -1,9 +1,11 @@
-#### TextClassifier
+### TextClassifier
 some basic classifier for text
 
-##### data
+#### data
 
-##### fast text
+#### fastText
 epoches:10    
 train time:11.6s    
 accuracy:80.02%    
+
+#### textCNN
