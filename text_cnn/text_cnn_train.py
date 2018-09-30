@@ -62,7 +62,6 @@ def generate_batch(words_vec_list, batch_num):
 with tf.Graph().as_default():
     inputs = tf.placeholder(tf.float64, shape=[None, words_length, embedding_length])
     labels = tf.placeholder(tf.int32, shape=[None])
-
     inputs_r = tf.reshape(inputs, [-1, words_length, embedding_length, 1])
 
     def get_pool(filters, size):
@@ -90,10 +89,14 @@ with tf.Graph().as_default():
         axis=3
     )
     pool = tf.reshape(pool, [-1, 30])
-    logits = tf.contrib.layers.fully_connected(
+    #logits = tf.contrib.layers.fully_connected(
+    #    inputs=pool,
+    #    num_outputs=num_classes,
+    #    activation_fn=None,
+    #)
+    logits = tf.layers.dense(
         inputs=pool,
-        num_outputs=num_classes,
-        activation_fn=None,
+        units=num_classes,
     )
     predictions = tf.argmax(logits, axis=-1, name='predictions')
     mean_loss = tf.reduce_mean(
@@ -120,6 +123,3 @@ with tf.Graph().as_default():
 
     saver = tf.train.Saver()
     saver.save(sess, './model/text_cnn.model')
-
-
-
