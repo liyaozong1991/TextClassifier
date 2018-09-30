@@ -82,11 +82,16 @@ with graph.as_default():
                 tf.random_uniform([vocabulary_size, embedding_size], -1.0, 1.0))
             embed = tf.reduce_mean(tf.nn.embedding_lookup(embeddings, train_inputs), 1)
         input_layer = embed
-        logits = tf.contrib.layers.fully_connected(
+        logits = tf.layers.dense(
             inputs=input_layer,
-            num_outputs=num_classes,
-            activation_fn=None,
+            units=num_classes,
+            activation=None,
         )
+        #logits = tf.contrib.layers.fully_connected(
+        #    inputs=input_layer,
+        #    num_outputs=num_classes,
+        #    activation_fn=None,
+        #)
         predictions = tf.argmax(logits, axis=-1, name='predictions')
         mean_loss = tf.reduce_mean(
             tf.nn.sparse_softmax_cross_entropy_with_logits(
@@ -106,7 +111,7 @@ with graph.as_default():
         for batch, labels in batch_generator:
             num += 1
             loss, _ = sess.run([mean_loss, train_step], feed_dict={train_inputs: batch, train_labels: labels})
-            # print('The {}th train is over, loss: {}'.format(num, loss))
+            print('The {}th train is over, loss: {}'.format(num, loss))
     end_time = time.time()
     print('total time:{}'.format(end_time - start_time))
 
