@@ -6,7 +6,7 @@ import collections
 import numpy as np
 import time
 
-epoches = 10
+epoches = 30
 words_length = 300
 n_words = 60000
 batch_size = 30
@@ -69,8 +69,8 @@ def generate_batch(batch_size, data_record_list):
 vocabulary_size = len(word_dict)
 num_classes = len(label_dict)
 graph = tf.Graph()
-filter_sizes = [3, 4, 5]
-num_filters = 4
+filter_sizes = list(range(3,6))
+num_filters = 8
 with graph.as_default():
     # input data
     input_x = tf.placeholder(tf.int64, [None, words_length], name="input_x")
