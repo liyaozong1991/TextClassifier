@@ -13,6 +13,7 @@
 # limitations under the License.
 # ==============================================================================
 # refer: https://github.com/tensorflow/tensorflow/blob/master/tensorflow/examples/tutorials/word2vec/word2vec_basic.py
+# this model is not finished,it does not use gpu but multi cpu
 """Basic word2vec example."""
 import collections
 import math
@@ -26,7 +27,7 @@ vocabulary_size = 60000
 embedding_size = 100  # Dimension of the embedding vector.
 num_sampled = 64  # Number of negative examples to sample.
 learning_rate = 0.1
-gpu_nums = 8
+gpu_nums = 6
 train_data_path = '../data/20ng-train-no-stop.txt'
 data_list = []
 raw_words_list = []
@@ -79,11 +80,11 @@ def get_next_batch(words_id_list):
 generate_batch = get_next_batch(words_id_list)
 
 # Step 4: Build and train a skip-gram model.
-def inference(batch):
+def inference(batch, labels):
     with tf.device('/cpu:0'):
         # Input data.
-        # train_inputs = tf.placeholder(tf.int32, shape=[batch_size])
         train_inputs = tf.convert_to_tensor(batch)
+        train_labels = tf.convert_to_tensor(labels, dtype=np.int64)
         shape=[vocabulary_size, embedding_size]
         # Look up embeddings for inputs.
         embeddings = tf.get_variable(
@@ -110,26 +111,21 @@ def inference(batch):
                 name='nce_biases',
                 initializer=tf.zeros([vocabulary_size]),
                 )
-        return embed, nce_weights, nce_biases
-
-def cal_loss(logits, train_labels, nce_weights, nce_biases):
-    train_labels = tf.convert_to_tensor(train_labels, dtype=np.int64)
-    loss = tf.reduce_mean(
-        tf.nn.nce_loss(
-            weights=nce_weights,
-            biases=nce_biases,
-            labels=train_labels,
-            inputs=logits,
-            num_sampled=num_sampled,
-            num_classes=vocabulary_size,
-        ),
-    )
+        loss = tf.reduce_mean(
+            tf.nn.nce_loss(
+                weights=nce_weights,
+                biases=nce_biases,
+                labels=train_labels,
+                inputs=embed,
+                num_sampled=num_sampled,
+                num_classes=vocabulary_size,
+            ),
+        )
     return loss
 
 def tower_loss(scope):
     batch, labels = next(generate_batch)
-    logits, nce_weights, nce_biases = inference(batch)
-    local_loss = cal_loss(logits, labels, nce_weights, nce_biases)
+    local_loss = inference(batch, labels)
     return local_loss
 
 def average_gradients(tower_grads):
@@ -148,28 +144,29 @@ def average_gradients(tower_grads):
 
 
 def train():
-    opt = tf.train.GradientDescentOptimizer(learning_rate)
-    tower_grads = []
-    for i in range(gpu_nums):
-        with tf.device('/gpu:{}'.format(i)):
-            with tf.name_scope('word2vec.tower_{}'.format(i)) as scope:
-                loss = tower_loss(scope)
-                # important
-                tf.get_variable_scope().reuse_variables()
-                grads = opt.compute_gradients(loss)
-                tower_grads.append(grads)
-    grads = average_gradients(tower_grads)
-    # Apply the gradients to adjust the shared variables.
-    train_op = opt.apply_gradients(grads)
-    init = tf.global_variables_initializer()
-    config = tf.ConfigProto(allow_soft_placement = True)
-    sess = tf.Session(config=config)
-    sess.run(init)
-    for i in range(max_train_steps):
-        sess.run([train_op])
-        print(loss_value)
-    #embeddings = embeddings.eval(sess)
-    #with open('./model/word2vec_multi', 'w') as fw:
-    #    for word in word_dict:
-    #        fw.write('\t'.join([word, str(word_dict[word]), ','.join(str(k) for k in embeddings[word_dict[word]])]) + '\n')
+    with tf.Graph().as_default(), tf.device('/cpu:0'):
+        opt = tf.train.GradientDescentOptimizer(learning_rate)
+        tower_grads = []
+        for i in range(gpu_nums):
+            with tf.device('/gpu:{}'.format(i)):
+                with tf.name_scope('word2vec.tower_{}'.format(i)) as scope:
+                    loss = tower_loss(scope)
+                    # important
+                    tf.get_variable_scope().reuse_variables()
+                    grads = opt.compute_gradients(loss)
+                    tower_grads.append(grads)
+        grads = average_gradients(tower_grads)
+        # Apply the gradients to adjust the shared variables.
+        train_op = opt.apply_gradients(grads)
+        init = tf.global_variables_initializer()
+        config=tf.ConfigProto(#allow_soft_placement=True,
+                            log_device_placement=True)
+        sess = tf.Session(config=config)
+        sess.run(init)
+        for i in range(max_train_steps):
+            sess.run([train_op])
+        #embeddings = embeddings.eval(sess)
+        #with open('./model/word2vec_multi', 'w') as fw:
+        #    for word in word_dict:
+        #        fw.write('\t'.join([word, str(word_dict[word]), ','.join(str(k) for k in embeddings[word_dict[word]])]) + '\n')
 train()
