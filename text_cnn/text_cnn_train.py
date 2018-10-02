@@ -2,6 +2,7 @@
 import tensorflow as tf
 import time
 import numpy as np
+import gensim
 
 words_length = 300
 embedding_length = 100
@@ -10,12 +11,14 @@ batch_size = 30
 learning_rate = 0.01
 
 # load word vec
-word_vec_dict = {}
-with open('./model/word2vec') as f:
-    for line in f:
-        line = line.strip()
-        line_items = line.split('\t')
-        word_vec_dict[line_items[0]] = [float(k) for k in line_items[2].split(',')]
+#word_vec_dict = {}
+#with open('./model/word2vec') as f:
+#    for line in f:
+#        line = line.strip()
+#        line_items = line.split('\t')
+#        word_vec_dict[line_items[0]] = [float(k) for k in line_items[2].split(',')]
+
+word_vec_dict = gensim.models.Word2Vec.load("./model/word2vec_gensim")
 
 # read train data
 train_data_path = '../data/20ng-train-no-stop.txt'
@@ -40,12 +43,17 @@ for word_list in words_list:
     local_vec = []
     label = word_list[0]
     for word in word_list[1]:
-        vec = word_vec_dict.get(word, word_vec_dict['UNK'])
+        if word in word_vec_dict.wv:
+            vec = word_vec_dict.wv[word]
+        else:
+            vec = np.zeros(100)
+        #vec = word_vec_dict.get(word, word_vec_dict['UNK'])
         local_vec.append(vec)
     if len(local_vec) > words_length:
         local_vec = local_vec[:words_length]
     while len(local_vec) < words_length:
-        local_vec.append(word_vec_dict['UNK'])
+        # local_vec.append(word_vec_dict['UNK'])
+        local_vec.append(np.zeros(100))
     word_vec_list.append([label_id_dict[label], local_vec])
 
 
@@ -60,10 +68,9 @@ def generate_batch(words_vec_list, batch_num):
 
 
 with tf.Graph().as_default():
-    inputs = tf.placeholder(tf.float64, shape=[None, words_length, embedding_length])
-    labels = tf.placeholder(tf.int32, shape=[None])
+    inputs = tf.placeholder(tf.float64, shape=[None, words_length, embedding_length], name='inputs')
+    labels = tf.placeholder(tf.int32, shape=[None], name='labels')
     inputs_r = tf.reshape(inputs, [-1, words_length, embedding_length, 1])
-
     def get_pool(filters, size):
         conv = tf.layers.conv2d(
             inputs=inputs_r,
@@ -79,21 +86,17 @@ with tf.Graph().as_default():
             strides=1,
         )
         return pool
-
     pool2 = get_pool(6, 2)
-    pool3 = get_pool(7, 3)
-    pool4 = get_pool(8, 4)
-    pool5 = get_pool(9, 5)
+    pool3 = get_pool(6, 3)
+    pool4 = get_pool(6, 4)
+    pool5 = get_pool(5, 5)
+    pool6 = get_pool(5, 6)
+    pool7 = get_pool(5, 7)
     pool = tf.concat(
-        values=[pool2, pool3, pool4, pool5],
+        values=[pool2, pool3, pool4, pool5, pool6, pool7],
         axis=3
     )
-    pool = tf.reshape(pool, [-1, 30])
-    #logits = tf.contrib.layers.fully_connected(
-    #    inputs=pool,
-    #    num_outputs=num_classes,
-    #    activation_fn=None,
-    #)
+    pool = tf.reshape(pool, [-1, pool.shape[3]])
     logits = tf.layers.dense(
         inputs=pool,
         units=num_classes,
@@ -107,6 +110,7 @@ with tf.Graph().as_default():
     )
     train_step = tf.train.AdamOptimizer(learning_rate).minimize(mean_loss, global_step=tf.train.get_global_step())
     init = tf.global_variables_initializer()
+    print(tf.global_variables())
     sess = tf.Session()
     sess.run(init)
     num = 0
@@ -117,9 +121,9 @@ with tf.Graph().as_default():
         for batch, label in batch_generator:
             num += 1
             loss, _ = sess.run([mean_loss, train_step], feed_dict={inputs: batch, labels: label})
-            print('The {}th train is over, loss: {}'.format(num, loss))
+            if num % 500 == 0:
+                print('The {}th train is over, loss: {}'.format(num, loss))
     end_time = time.time()
     print('total time:{}'.format(end_time - start_time))
-
     saver = tf.train.Saver()
     saver.save(sess, './model/text_cnn.model')
