@@ -72,8 +72,8 @@ graph = tf.Graph()
 with graph.as_default():
     # input data
     with tf.name_scope('inputs'):
-        train_inputs = tf.placeholder(tf.int32, shape=[None, words_length], name='inputs')
-        train_labels = tf.placeholder(tf.int32, shape=[None], name='labels')
+        train_inputs = tf.placeholder(tf.int64, shape=[None, words_length], name='inputs')
+        train_labels = tf.placeholder(tf.int64, shape=[None], name='labels')
 
     with tf.device('/cpu:0'):
         # Look up embeddings for inputs.
@@ -87,22 +87,23 @@ with graph.as_default():
             units=num_classes,
             activation=None,
         )
-        #logits = tf.contrib.layers.fully_connected(
-        #    inputs=input_layer,
-        #    num_outputs=num_classes,
-        #    activation_fn=None,
-        #)
         predictions = tf.argmax(logits, axis=-1, name='predictions')
+        correct_predictions = tf.equal(predictions, train_labels)
+        accuracy = tf.reduce_mean(tf.cast(correct_predictions, "float"), name="accuracy")
         mean_loss = tf.reduce_mean(
             tf.nn.sparse_softmax_cross_entropy_with_logits(
                 labels=train_labels,
                 logits=logits,
             ),
         )
+        tf.summary.scalar('loss', mean_loss)
+        tf.summary.scalar('accuracy', accuracy)
         train_step = tf.train.AdamOptimizer(learning_rate).minimize(mean_loss, global_step=tf.train.get_global_step())
+        summary_op = tf.summary.merge_all()
     init = tf.global_variables_initializer()
     sess = tf.Session()
     sess.run(init)
+    summary_writer = tf.summary.FileWriter('./events', sess.graph)
     num = 0
     start_time = time.time()
     for k in range(epoches):
@@ -110,10 +111,9 @@ with graph.as_default():
         batch_generator = generate_batch(batch_size, data_record_list)
         for batch, labels in batch_generator:
             num += 1
-            loss, _ = sess.run([mean_loss, train_step], feed_dict={train_inputs: batch, train_labels: labels})
-            print('The {}th train is over, loss: {}'.format(num, loss))
+            loss, _, _summary = sess.run([mean_loss, train_step, summary_op], feed_dict={train_inputs: batch, train_labels: labels})
+            summary_writer.add_summary(_summary, num)
     end_time = time.time()
     print('total time:{}'.format(end_time - start_time))
-
     saver = tf.train.Saver()
     saver.save(sess, './model/fast_text.model')
