@@ -6,8 +6,8 @@ import collections
 import numpy as np
 import time
 
-epoches = 30
-words_length = 300
+epoches = 20
+words_length = 30
 n_words = 60000
 batch_size = 30
 embedding_size = 100
@@ -40,6 +40,8 @@ word_dict = {}
 for word, _ in count:
     word_dict[word] = len(word_dict)
 
+reverse_word_dict = dict((v,k) for k,v in word_dict.items())
+
 with open('./model/word_dict', 'w') as fw:
     for word, ids in word_dict.items():
         fw.write(word + '\t' + str(ids) + '\n')
@@ -47,6 +49,8 @@ with open('./model/word_dict', 'w') as fw:
 label_dict = {}
 for label in label_set:
     label_dict[label] = len(label_dict)
+
+reverse_label_dict = dict((v,k) for k,v in label_dict.items())
 
 with open('./model/label_dict', 'w') as fw:
     for word, ids in label_dict.items():
@@ -65,6 +69,18 @@ def generate_batch(batch_size, data_record_list):
         labels = [k[1] for k in data_record_list[i:i+batch_size]]
         yield batch, labels
 
+# test generate_batch
+#np.random.shuffle(data_record_list)
+#batch_generator = generate_batch(batch_size, data_record_list)
+#count_num = 0
+#for x_batch, y_batch in batch_generator:
+#    count_num += 1
+#    for item in zip(y_batch, x_batch):
+#        print(str(item[0]) + '\t' + ','.join("{}".format(k) for k in item[1]))
+#    if count_num == 2:
+#        break
+#exit()
+
 # build graph
 vocabulary_size = len(word_dict)
 num_classes = len(label_dict)
@@ -82,41 +98,71 @@ with graph.as_default():
             name="W")
         embedded_chars = tf.nn.embedding_lookup(W, input_x)
         embedded_chars_expanded = tf.expand_dims(embedded_chars, -1)
-        pooled_outputs = []
-        for i, filter_size in enumerate(filter_sizes):
-            with tf.name_scope("conv-maxpool-%s" % filter_size):
-                # Convolution Layer
-                filter_shape = [filter_size, embedding_size, 1, num_filters]
-                W = tf.Variable(tf.truncated_normal(filter_shape, stddev=0.1))
-                b = tf.Variable(tf.constant(0.1, shape=[num_filters]))
-                conv = tf.nn.conv2d(
-                    embedded_chars_expanded,
-                    W,
-                    strides=[1, 1, 1, 1],
-                    padding="VALID",
-                    name="conv")
-                # Apply nonlinearity
-                h = tf.nn.relu(tf.nn.bias_add(conv, b), name="relu")
-                # Max-pooling over the outputs
-                pooled = tf.nn.max_pool(
-                    h,
-                    ksize=[1, words_length - filter_size + 1, 1, 1],
-                    strides=[1, 1, 1, 1],
-                    padding='VALID',
-                    name="pool")
-                pooled_outputs.append(pooled)
-                # Combine all the pooled features
-        num_filters_total = num_filters * len(filter_sizes)
-        h_pool = tf.concat(pooled_outputs, 3)
-        h_pool_flat = tf.reshape(h_pool, [-1, num_filters_total])
-        h_drop = tf.nn.dropout(h_pool_flat, dropout_keep_prob)
-        W = tf.Variable(tf.truncated_normal([num_filters_total, num_classes], stddev=0.1))
-        b = tf.Variable(tf.constant(0.1, shape=[num_classes]))
-        scores = tf.nn.xw_plus_b(h_drop, W, b, name="scores")
-        predictions = tf.argmax(scores, 1, name="predictions")
+        def get_pool(filters, size):
+            conv = tf.layers.conv2d(
+                inputs=embedded_chars_expanded,
+                filters=filters,
+                kernel_size=[size, embedding_size],
+                padding='valid',
+                activation=tf.nn.relu,
+                use_bias=True,
+            )
+            pool = tf.layers.max_pooling2d(
+                inputs=conv,
+                pool_size=[words_length-size+1, 1],
+                strides=1,
+            )
+            return pool
+        pool2 = get_pool(6, 2)
+        pool3 = get_pool(6, 3)
+        pool4 = get_pool(6, 4)
+        pool5 = get_pool(5, 5)
+        pool6 = get_pool(5, 6)
+        pool7 = get_pool(5, 7)
+        pool = tf.concat(
+            values=[pool2, pool3, pool4, pool5, pool6, pool7],
+            axis=3
+        )
+        pool = tf.reshape(pool, [-1, pool.shape[3]])
+        logits = tf.layers.dense(
+            inputs=pool,
+            units=num_classes,
+        )
+        predictions = tf.argmax(logits, axis=-1, name='predictions')
+        #pooled_outputs = []
+        #for i, filter_size in enumerate(filter_sizes):
+        #    with tf.name_scope("conv-maxpool-%s" % filter_size):
+        #        # Convolution Layer
+        #        filter_shape = [filter_size, embedding_size, 1, num_filters]
+        #        W = tf.Variable(tf.truncated_normal(filter_shape, stddev=0.1))
+        #        b = tf.Variable(tf.constant(0.1, shape=[num_filters]))
+        #        conv = tf.nn.conv2d(
+        #            embedded_chars_expanded,
+        #            W,
+        #            strides=[1, 1, 1, 1],
+        #            padding="VALID",
+        #            name="conv")
+        #        # Apply nonlinearity
+        #        h = tf.nn.relu(tf.nn.bias_add(conv, b), name="relu")
+        #        # Max-pooling over the outputs
+        #        pooled = tf.nn.max_pool(
+        #            h,
+        #            ksize=[1, words_length - filter_size + 1, 1, 1],
+        #            strides=[1, 1, 1, 1],
+        #            padding='VALID',
+        #            name="pool")
+        #        pooled_outputs.append(pooled)
+        #        # Combine all the pooled features
+        #num_filters_total = num_filters * len(filter_sizes)
+        #h_pool = tf.concat(pooled_outputs, 3)
+        #h_pool_flat = tf.reshape(h_pool, [-1, num_filters_total])
+        #h_drop = tf.nn.dropout(h_pool_flat, dropout_keep_prob)
+        #W = tf.Variable(tf.truncated_normal([num_filters_total, num_classes], stddev=0.1))
+        #b = tf.Variable(tf.constant(0.1, shape=[num_classes]))
+        #scores = tf.nn.xw_plus_b(h_drop, W, b, name="scores")
         losses = tf.nn.sparse_softmax_cross_entropy_with_logits(
                 labels = input_y,
-                logits = scores
+                logits = logits
                 )
         loss = tf.reduce_mean(losses)
         correct_predictions = tf.equal(predictions, input_y)
