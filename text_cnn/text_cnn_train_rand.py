@@ -1,6 +1,4 @@
-
 # coding: utf8
-
 import tensorflow as tf
 import collections
 import numpy as np
@@ -12,8 +10,8 @@ n_words = 60000
 batch_size = 30
 embedding_size = 100
 learning_rate = 0.1
-train_data_path = '../data/20ng-train-no-stop.txt'
 
+train_data_path = '../data/20ng-train-no-stop.txt'
 raw_data_record_list = []
 words_list = []
 label_set = set()
